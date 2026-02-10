@@ -250,8 +250,10 @@ def style_cell(cell, row_idx):
 
 def auto_width(ws):
     for col in ws.columns:
-        max_len = max((len(str(c.value or "")) for c in col), default=0)
-        ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 40)
+        first = col[0]
+        if hasattr(first, 'column_letter'):
+            max_len = max((len(str(c.value or "")) for c in col if not isinstance(c, openpyxl.cell.cell.MergedCell)), default=0)
+            ws.column_dimensions[first.column_letter].width = min(max_len + 4, 40)
 
 
 def generate_xlsx(trades_by_symbol, deposits, withdrawals, live_prices, fx_rates, output_path):

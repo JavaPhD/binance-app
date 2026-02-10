@@ -1,13 +1,12 @@
 #!/bin/bash
 # Binance Portfolio Reporter — One-time setup
+# mkdir binance-reporter && cd binance-reporter
 # curl -sL https://raw.githubusercontent.com/JavaPhD/binance-app/main/setup.sh | bash
 set -e
-DIR="$HOME/binance-reporter"
 REPO="https://raw.githubusercontent.com/JavaPhD/binance-app/main"
 echo "=== Binance Portfolio Reporter Setup ==="
+echo "Installing to: $(pwd)"
 echo ""
-mkdir -p "$DIR"
-cd "$DIR"
 echo "Downloading files..."
 curl -sLO "$REPO/binance_report.py"
 curl -sLO "$REPO/requirements.txt"
@@ -22,10 +21,9 @@ echo "=== Setup complete! ==="
 echo ""
 echo "Next steps:"
 echo "  1. Edit your credentials:"
-echo "     vim $DIR/.env"
+echo "     vim .env"
 echo ""
 echo "  2. Run the report:"
-echo "     cd $DIR"
 echo "     source .venv/bin/activate"
 echo "     python binance_report.py"
 echo ""

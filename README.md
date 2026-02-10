@@ -16,16 +16,17 @@ XLSX report with 3 sheets:
 
 ### Step 1: Install
 
-Open Terminal and paste:
+Open Terminal, create a folder, and run setup:
 
 ```bash
+mkdir binance-reporter && cd binance-reporter
 curl -sL https://raw.githubusercontent.com/JavaPhD/binance-app/main/setup.sh | bash
 ```
 
 ### Step 2: Add your Binance API credentials
 
 ```bash
-vim ~/binance-reporter/.env
+vim .env
 ```
 
 Fill in your `BINANCE_API_KEY` and `BINANCE_API_SECRET`.
@@ -36,7 +37,6 @@ Fill in your `BINANCE_API_KEY` and `BINANCE_API_SECRET`.
 ### Step 3: Run
 
 ```bash
-cd ~/binance-reporter
 source .venv/bin/activate
 python binance_report.py
 ```

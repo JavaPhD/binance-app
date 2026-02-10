@@ -1,15 +1,10 @@
 # Binance Portfolio Reporter
 
-Desktop app that pulls your Binance trading data and generates a formatted Excel (XLSX) report.
+Pulls your Binance trading data and generates a formatted Excel (XLSX) report.
 
-## What it does
+## Output
 
-Connects to the Binance API, fetches all your:
-- **Trades** (spot buys/sells)
-- **Deposits**
-- **Withdrawals**
-
-Then generates an XLSX report with 3 sheets:
+XLSX report with 3 sheets:
 
 | Sheet | Contents |
 |-------|----------|
@@ -17,55 +12,40 @@ Then generates an XLSX report with 3 sheets:
 | **Holdings** | Per-coin balances, avg buy price, current market price, unrealised P&L |
 | **PNL Summary** | Profit & Loss per coin, totals in USD/SGD/CNY |
 
-## Setup on macOS
+## Quick Start
 
-### Option A: Run directly (quick)
+### Step 1: Install
+
+Open Terminal and paste:
 
 ```bash
-# Install Python if not already installed
-brew install python@3.12
+curl -sL https://raw.githubusercontent.com/JavaPhD/binance-app/main/setup.sh | bash
+```
 
-# Clone or copy this folder to the Mac, then:
-cd binance-app
-python3 -m venv .venv
+### Step 2: Add your Binance API credentials
+
+```bash
+vim ~/binance-reporter/.env
+```
+
+Fill in your `BINANCE_API_KEY` and `BINANCE_API_SECRET`.
+
+> Get your API keys from https://www.binance.com/en/my/settings/api-management
+> Only **Enable Reading** is needed — no trading or withdrawal permissions required.
+
+### Step 3: Run
+
+```bash
+cd ~/binance-reporter
 source .venv/bin/activate
-pip install -r requirements.txt
-
-# Run the app
-python binance_app.py
+python binance_report.py
 ```
 
-### Option B: Build a standalone .app (recommended for non-technical users)
+Report is saved to your Desktop as `Binance_Report_YYYYMMDD.xlsx`.
+
+## Options
 
 ```bash
-cd binance-app
-./build_macos.sh
+python binance_report.py --symbols BTCUSDT,ETHUSDT,BNBUSDT
+python binance_report.py --output ~/Downloads/my_report.xlsx
 ```
-
-This creates `dist/Binance Reporter.app` — drag it to `/Applications` and double-click to run.
-
-**First launch note:** macOS may block the app. Go to **System Settings → Privacy & Security** and click **Open Anyway**.
-
-## Usage
-
-1. Launch the app
-2. Enter your Binance **API Key** and **API Secret**
-   - Create read-only API keys at https://www.binance.com/en/my/settings/api-management
-   - Only **read** permissions are needed (no trading, no withdrawal)
-3. Adjust symbols if needed (default: `BTCUSDC, ETHUSDC`)
-4. Click **Generate Report**
-5. XLSX is saved to your Desktop by default
-
-## API Key Setup (Binance)
-
-1. Log in to Binance → Account → API Management
-2. Create a new API key
-3. **Enable only:** "Enable Reading"
-4. **Disable:** Enable Spot & Margin Trading, Enable Withdrawals
-5. Optionally restrict to your IP address for extra security
-
-## Requirements
-
-- Python 3.9+
-- macOS 10.15+ (Catalina or later)
-- Binance API key with read-only permissions

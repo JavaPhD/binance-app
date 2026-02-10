@@ -1,6 +1,6 @@
 #!/bin/bash
 # Binance Portfolio Reporter — One-time setup
-# Run: curl -sL https://raw.githubusercontent.com/JavaPhD/binance-app/main/setup.sh | bash
+# curl -sL https://raw.githubusercontent.com/JavaPhD/binance-app/main/setup.sh | bash
 set -e
 DIR="$HOME/binance-reporter"
 REPO="https://raw.githubusercontent.com/JavaPhD/binance-app/main"

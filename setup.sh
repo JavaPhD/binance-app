@@ -12,10 +12,11 @@ echo "Downloading files..."
 curl -sLO "$REPO/binance_report.py"
 curl -sLO "$REPO/requirements.txt"
 curl -sL "$REPO/.env.example" -o .env
-echo "Setting up Python environment..."
+echo "Creating Python environment..."
 python3 -m venv .venv
-.venv/bin/pip install --quiet --upgrade pip
-.venv/bin/pip install --quiet -r requirements.txt
+echo "Installing dependencies (this may take a minute)..."
+.venv/bin/pip install --upgrade pip 2>&1 | tail -1
+.venv/bin/pip install -r requirements.txt 2>&1 | tail -1
 echo ""
 echo "=== Setup complete! ==="
 echo ""

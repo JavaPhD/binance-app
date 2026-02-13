@@ -436,19 +436,32 @@ def generate_xlsx(
                 cell.number_format = '#,##0.00'
     auto_width(ws)
 
-    # ---- Sheet 2: Holdings ----
-    ws2 = wb.create_sheet("Holdings")
+    # ---- Sheet 2: PNL Holdings ----
+    ws2 = wb.create_sheet("PNL Holdings")
     ws2.sheet_properties.tabColor = "548235"
-    ws2.merge_cells("A1:H1")
-    ws2["A1"].value = "Current Holdings"
+    ws2.merge_cells("A1:L1")
+    ws2["A1"].value = "PNL & Holdings"
     ws2["A1"].font = TITLE_FONT
     ws2.row_dimensions[1].height = 30
-    ws2.merge_cells("A2:H2")
+    ws2.merge_cells("A2:L2")
     ws2["A2"].value = f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     ws2["A2"].font = SUBTITLE_FONT
 
     holdings = compute_holdings(trades_by_symbol, deposits, withdrawals, manual_plans, manual_transfers)
-    h_headers = ["Coin", "Bought", "Sold", "Net Holdings", "Avg Buy Price (USD)", "Current Price (USD)", "Market Value (USD)", "Unrealised P&L (USD)"]
+    h_headers = [
+        "Coin",
+        "Bought Qty",
+        "Sold Qty",
+        "Net Holdings",
+        "Avg Buy Price (USD)",
+        "Current Price (USD)",
+        "Market Value (USD)",
+        "Unrealised P&L (USD)",
+        "P&L (%)",
+        "Total Bought (USD)",
+        "Total Sold (USD)",
+        "Net Cost (USD)",
+    ]
     hr2 = 4
     for c, h in enumerate(h_headers, 1):
         ws2.cell(row=hr2, column=c, value=h)
@@ -462,7 +475,7 @@ def generate_xlsx(
     sorted_coins = sorted(all_coins, key=lambda c: (0 if c in major else 1, major.index(c) if c in major else 0, c))
     report_coins = [c for c in sorted_coins if c not in STABLECOINS]
 
-    ri, total_market, total_cost = 0, 0.0, 0.0
+    ri, total_market, total_cost, total_sold = 0, 0.0, 0.0, 0.0
     for coin in report_coins:
         h = holdings.get(coin, {"buy_qty": 0.0, "buy_quote": 0.0, "sell_qty": 0.0, "sell_quote": 0.0, "deposit_qty": 0.0, "withdraw_qty": 0.0})
         # Portfolio view: withdrawals are treated as transfers you still own.
@@ -473,20 +486,37 @@ def generate_xlsx(
         avg_buy = (h["buy_quote"] / h["buy_qty"]) if h["buy_qty"] > 0 else 0
         cprice = live_prices.get(coin, 0)
         mval = net * cprice if cprice else 0
-        cost = h["buy_quote"] - h["sell_quote"]
+        total_bought_usd = h["buy_quote"]
+        total_sold_usd = h["sell_quote"]
+        cost = total_bought_usd - total_sold_usd
         pnl = (mval - cost) if cprice else 0
+        pnl_pct = (pnl / total_bought_usd * 100) if total_bought_usd > 0 and cprice else 0
         if cprice:
             total_market += mval
             total_cost += cost
+            total_sold += total_sold_usd
 
         r = hr2 + 1 + ri
-        vals = [coin, h["buy_qty"], h["sell_qty"], net, avg_buy, cprice or "N/A", mval if cprice else "N/A", pnl if cprice else "N/A"]
+        vals = [
+            coin,
+            h["buy_qty"],
+            h["sell_qty"],
+            net,
+            avg_buy,
+            cprice or "N/A",
+            mval if cprice else "N/A",
+            pnl if cprice else "N/A",
+            pnl_pct if cprice else "N/A",
+            total_bought_usd,
+            total_sold_usd,
+            cost,
+        ]
         for c, val in enumerate(vals, 1):
             cell = ws2.cell(row=r, column=c, value=val)
             style_cell(cell, ri)
             if c in (2, 3, 4) and isinstance(val, float):
                 cell.number_format = '#,##0.00000000'
-            elif c in (5, 6, 7) and isinstance(val, (int, float)):
+            elif c in (5, 6, 7, 10, 11, 12) and isinstance(val, (int, float)):
                 cell.number_format = '#,##0.00'
             elif c == 8 and isinstance(val, (int, float)):
                 cell.number_format = '#,##0.00'
@@ -494,6 +524,12 @@ def generate_xlsx(
                     cell.font, cell.fill = GREEN_FONT, GREEN_FILL
                 elif val < 0:
                     cell.font, cell.fill = RED_FONT, RED_FILL
+            elif c == 9 and isinstance(val, (int, float)):
+                cell.number_format = '0.0"%"'
+                if val > 0:
+                    cell.font = GREEN_FONT
+                elif val < 0:
+                    cell.font = RED_FONT
         ri += 1
 
     if ri > 0:
@@ -506,99 +542,36 @@ def generate_xlsx(
         c = ws2.cell(row=r, column=8, value=tp)
         c.font = Font(bold=True, size=11, color="006100" if tp >= 0 else "9C0006")
         c.number_format = '#,##0.00'
-    auto_width(ws2)
-
-    # ---- Sheet 3: PNL Summary ----
-    ws3 = wb.create_sheet("PNL Summary")
-    ws3.sheet_properties.tabColor = "BF8F00"
-    ws3.merge_cells("A1:H1")
-    ws3["A1"].value = "Profit & Loss Summary"
-    ws3["A1"].font = TITLE_FONT
-    ws3.row_dimensions[1].height = 30
-    ws3.merge_cells("A2:H2")
-    ws3["A2"].value = f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-    ws3["A2"].font = SUBTITLE_FONT
-
-    p_headers = ["Coin", "Total Bought (USD)", "Total Sold (USD)", "Net Cost (USD)", "Current Holdings", "Market Value (USD)", "P&L (USD)", "P&L (%)"]
-    hr3 = 4
-    for c, h in enumerate(p_headers, 1):
-        ws3.cell(row=hr3, column=c, value=h)
-    style_header(ws3, hr3, len(p_headers))
-    ws3.freeze_panes = f"A{hr3 + 1}"
-
-    ri, g_cost, g_market, g_sold = 0, 0.0, 0.0, 0.0
-    for coin in report_coins:
-        h = holdings.get(coin, {"buy_qty": 0.0, "buy_quote": 0.0, "sell_qty": 0.0, "sell_quote": 0.0, "deposit_qty": 0.0, "withdraw_qty": 0.0})
-        inferred_net_qty = h["buy_qty"] - h["sell_qty"] + h["deposit_qty"]
-        net_qty = inferred_net_qty
-        if h["buy_quote"] == 0 and h["sell_quote"] == 0:
-            continue
-        cprice = live_prices.get(coin, 0)
-        mval = net_qty * cprice if cprice else 0
-        net_cost = h["buy_quote"] - h["sell_quote"]
-        pnl = mval - net_cost if cprice else 0
-        pnl_pct = (pnl / h["buy_quote"] * 100) if h["buy_quote"] > 0 and cprice else 0
-        if cprice:
-            g_market += mval
-        g_cost += net_cost
-        g_sold += h["sell_quote"]
-
-        r = hr3 + 1 + ri
-        vals = [coin, h["buy_quote"], h["sell_quote"], net_cost, net_qty, mval if cprice else "N/A", pnl if cprice else "N/A", pnl_pct if cprice else "N/A"]
-        for c, val in enumerate(vals, 1):
-            cell = ws3.cell(row=r, column=c, value=val)
-            style_cell(cell, ri)
-            if c in (2, 3, 4, 6) and isinstance(val, (int, float)):
-                cell.number_format = '#,##0.00'
-            elif c == 5 and isinstance(val, float):
-                cell.number_format = '#,##0.00000000'
-            elif c == 7 and isinstance(val, (int, float)):
-                cell.number_format = '#,##0.00'
-                if val > 0:
-                    cell.font, cell.fill = GREEN_FONT, GREEN_FILL
-                elif val < 0:
-                    cell.font, cell.fill = RED_FONT, RED_FILL
-            elif c == 8 and isinstance(val, (int, float)):
-                cell.number_format = '0.0"%"'
-                if val > 0:
-                    cell.font = GREEN_FONT
-                elif val < 0:
-                    cell.font = RED_FONT
-        ri += 1
-
-    if ri > 0:
-        r = hr3 + ri + 2
-        ws3.cell(row=r, column=1, value="TOTAL").font = Font(bold=True, size=11)
-        for col, val in [(4, g_cost), (6, g_market)]:
-            c = ws3.cell(row=r, column=col, value=val)
-            c.font = Font(bold=True, size=11)
-            c.number_format = '#,##0.00'
-        g_pnl = g_market - g_cost
-        g_pnl_pct = (g_pnl / (g_cost + g_sold) * 100) if (g_cost + g_sold) > 0 else 0
-        c = ws3.cell(row=r, column=7, value=g_pnl)
-        c.font = Font(bold=True, size=11, color="006100" if g_pnl >= 0 else "9C0006")
+        c = ws2.cell(row=r, column=10, value=total_cost + total_sold)
+        c.font = Font(bold=True, size=11)
         c.number_format = '#,##0.00'
-        c = ws3.cell(row=r, column=8, value=g_pnl_pct)
-        c.font = Font(bold=True, size=11, color="006100" if g_pnl_pct >= 0 else "9C0006")
+        c = ws2.cell(row=r, column=11, value=total_sold)
+        c.font = Font(bold=True, size=11)
+        c.number_format = '#,##0.00'
+        c = ws2.cell(row=r, column=12, value=total_cost)
+        c.font = Font(bold=True, size=11)
+        c.number_format = '#,##0.00'
+        tp_pct = (tp / (total_cost + total_sold) * 100) if (total_cost + total_sold) > 0 else 0
+        c = ws2.cell(row=r, column=9, value=tp_pct)
+        c.font = Font(bold=True, size=11, color="006100" if tp_pct >= 0 else "9C0006")
         c.number_format = '0.0"%"'
 
-        # FX conversions
         usd_sgd = fx_rates.get("USD_SGD", 1.33)
         usd_cny = fx_rates.get("USD_CNY", 7.10)
         r += 2
-        ws3.cell(row=r, column=1, value="Currency Conversions").font = SUBTITLE_FONT
+        ws2.cell(row=r, column=1, value="Currency Conversions").font = SUBTITLE_FONT
         r += 1
         for label, rate in [("USD", 1.0), ("SGD", usd_sgd), ("CNY", usd_cny)]:
-            ws3.cell(row=r, column=1, value=f"Market Value ({label})").font = Font(bold=True)
-            ws3.cell(row=r, column=2, value=g_market * rate).number_format = '#,##0.00'
-            ws3.cell(row=r, column=4, value=f"P&L ({label})").font = Font(bold=True)
-            pc = ws3.cell(row=r, column=5, value=g_pnl * rate)
+            ws2.cell(row=r, column=1, value=f"Market Value ({label})").font = Font(bold=True)
+            ws2.cell(row=r, column=2, value=total_market * rate).number_format = '#,##0.00'
+            ws2.cell(row=r, column=4, value=f"P&L ({label})").font = Font(bold=True)
+            pc = ws2.cell(row=r, column=5, value=tp * rate)
             pc.number_format = '#,##0.00'
-            pc.font = GREEN_FONT if g_pnl >= 0 else RED_FONT
+            pc.font = GREEN_FONT if tp >= 0 else RED_FONT
             r += 1
         r += 1
-        ws3.cell(row=r, column=1, value=f"FX Rates: USD/SGD={usd_sgd:.4f}  USD/CNY={usd_cny:.4f}")
-    auto_width(ws3)
+        ws2.cell(row=r, column=1, value=f"FX Rates: USD/SGD={usd_sgd:.4f}  USD/CNY={usd_cny:.4f}")
+    auto_width(ws2)
 
     wb.save(output_path)
     return len(rows)
@@ -712,7 +685,7 @@ def main():
         current_balances,
     )
     print(f"Report saved: {output}")
-    print(f"  {tx_count} transactions across 3 sheets (Transactions, Holdings, PNL Summary)")
+    print(f"  {tx_count} transactions across 2 sheets (Transactions, PNL Holdings)")
 
 
 if __name__ == "__main__":

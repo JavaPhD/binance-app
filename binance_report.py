@@ -105,6 +105,31 @@ def to_ms(ts):
     return None
 
 
+STABLECOINS = ("USDC", "USDT", "BUSD", "FDUSD", "USD")
+QUOTE_CURRENCIES = ("USDC", "USDT")
+
+
+def fetch_traded_symbols(key, secret, base_url):
+    """Discover all trading pairs by checking account balances against known quotes."""
+    account = api_request("GET", "/api/v3/account", {}, key, secret, base_url)
+    coins = set()
+    for b in account.get("balances", []):
+        asset = b["asset"]
+        free = float(b.get("free", 0))
+        locked = float(b.get("locked", 0))
+        if free > 0 or locked > 0:
+            coins.add(asset)
+
+    # Build symbol pairs for non-stablecoin assets
+    symbols = []
+    for coin in sorted(coins):
+        if coin in STABLECOINS:
+            continue
+        for quote in QUOTE_CURRENCIES:
+            symbols.append(f"{coin}{quote}")
+    return symbols
+
+
 def fetch_all_trades(symbol, key, secret, base_url):
     trades, from_id = [], None
     while True:
@@ -202,7 +227,10 @@ def compute_holdings(trades_by_symbol, deposits, withdrawals, manual_plans=None,
         if not base_coin:
             base_coin = symbol[:3]
 
+        quote_coin = symbol.upper()[len(base_coin):] if base_coin else None
         ensure(base_coin)
+        if quote_coin:
+            ensure(quote_coin)
         for t in trades:
             try:
                 qty = float(t.get("qty", 0))
@@ -212,9 +240,15 @@ def compute_holdings(trades_by_symbol, deposits, withdrawals, manual_plans=None,
             if t.get("isBuyer"):
                 holdings[base_coin]["buy_qty"] += qty
                 holdings[base_coin]["buy_quote"] += quote_qty
+                if quote_coin:
+                    holdings[quote_coin]["sell_qty"] += quote_qty
+                    holdings[quote_coin]["sell_quote"] += quote_qty
             else:
                 holdings[base_coin]["sell_qty"] += qty
                 holdings[base_coin]["sell_quote"] += quote_qty
+                if quote_coin:
+                    holdings[quote_coin]["buy_qty"] += quote_qty
+                    holdings[quote_coin]["buy_quote"] += quote_qty
 
     for d in deposits:
         coin = d.get("coin", "")
@@ -557,8 +591,13 @@ def main():
         print(f"Edit your .env file: {Path(__file__).resolve().parent / '.env'}")
         sys.exit(1)
 
-    symbols_str = args.symbols or os.environ.get("SYMBOLS", "BTCUSDC,ETHUSDC")
-    symbols = [s.strip().upper() for s in symbols_str.split(",") if s.strip()]
+    symbols_str = args.symbols or os.environ.get("SYMBOLS", "")
+    if symbols_str:
+        symbols = [s.strip().upper() for s in symbols_str.split(",") if s.strip()]
+    else:
+        print("Discovering traded symbols from account...", end=" ", flush=True)
+        symbols = fetch_traded_symbols(api_key, api_secret, base_url)
+        print(f"{len(symbols)} pairs")
 
     output = args.output or str(Path.home() / "Desktop" / f"Binance_Report_{datetime.now().strftime('%Y%m%d')}.xlsx")
 

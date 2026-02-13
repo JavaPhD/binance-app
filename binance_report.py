@@ -600,7 +600,7 @@ def main():
         print(f"Edit your .env file: {Path(__file__).resolve().parent / '.env'}")
         sys.exit(1)
 
-    symbols_str = args.symbols or os.environ.get("SYMBOLS", "")
+    symbols_str = args.symbols
     if symbols_str:
         symbols = [s.strip().upper() for s in symbols_str.split(",") if s.strip()]
     else:

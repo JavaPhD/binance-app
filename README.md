@@ -3,17 +3,6 @@
 Generates an Excel report of your Binance transactions, holdings, and P&L.
 
 ## Setup (one-time)
-
-### Option A: Quick setup (no git needed)
-
-```bash
-mkdir binance-reporter && cd binance-reporter
-curl -sL https://raw.githubusercontent.com/JavaPhD/binance-app/main/setup.sh | bash
-vim .env   # fill in your API key and secret
-```
-
-### Option B: Git clone
-
 ```bash
 git clone https://github.com/JavaPhD/binance-app.git
 cd binance-app

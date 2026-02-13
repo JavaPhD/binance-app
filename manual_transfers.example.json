@@ -1,0 +1,9 @@
+[
+  {
+    "name": "Example transfer",
+    "date": "2025-01-15",
+    "coin": "BTC",
+    "amount": 0.005,
+    "quote": 475.00
+  }
+]

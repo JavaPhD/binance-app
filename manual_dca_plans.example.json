@@ -1,0 +1,19 @@
+[
+  {
+    "name": "Example DCA Plan",
+    "start": "2025-01-01",
+    "end": "2025-03-01",
+    "allocations": [
+      {
+        "coin": "BTC",
+        "amount": 0.01,
+        "avg_price": 95000.00
+      },
+      {
+        "coin": "ETH",
+        "amount": 0.5,
+        "avg_price": 3200.00
+      }
+    ]
+  }
+]

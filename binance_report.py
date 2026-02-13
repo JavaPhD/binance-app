@@ -11,6 +11,7 @@ Usage:
 
 import hmac
 import hashlib
+import json
 import os
 import sys
 import time
@@ -157,12 +158,36 @@ def get_fx_rate(ticker_symbol, default):
     return default
 
 
+def load_manual_dca_plans(script_dir):
+    json_path = script_dir / "manual_dca_plans.json"
+    if not json_path.exists():
+        return []
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def load_manual_transfers(script_dir):
+    json_path = script_dir / "manual_transfers.json"
+    if not json_path.exists():
+        return []
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
 # ---------------------------------------------------------------------------
 # Holdings computation
 # ---------------------------------------------------------------------------
 
-def compute_holdings(trades_by_symbol, deposits, withdrawals):
+def compute_holdings(trades_by_symbol, deposits, withdrawals, manual_plans=None, manual_transfers=None):
     holdings = {}
+    manual_plans = manual_plans or []
+    manual_transfers = manual_transfers or []
 
     def ensure(coin):
         if coin not in holdings:
@@ -208,6 +233,33 @@ def compute_holdings(trades_by_symbol, deposits, withdrawals):
                 holdings[coin]["withdraw_qty"] += float(w.get("amount", 0))
             except (TypeError, ValueError):
                 pass
+
+    for plan in manual_plans:
+        for alloc in plan.get("allocations", []):
+            coin = alloc.get("coin")
+            if not coin:
+                continue
+            ensure(coin)
+            try:
+                amt = float(alloc.get("amount", 0))
+                price = float(alloc.get("avg_price", 0))
+            except (TypeError, ValueError):
+                continue
+            holdings[coin]["buy_qty"] += amt
+            holdings[coin]["buy_quote"] += amt * price
+
+    for tx in manual_transfers:
+        coin = tx.get("coin")
+        if not coin:
+            continue
+        ensure(coin)
+        try:
+            amt = float(tx.get("amount", 0))
+            quote_amt = float(tx.get("quote", 0))
+        except (TypeError, ValueError):
+            continue
+        holdings[coin]["buy_qty"] += amt
+        holdings[coin]["buy_quote"] += quote_amt
 
     return holdings
 
@@ -256,7 +308,7 @@ def auto_width(ws):
             ws.column_dimensions[first.column_letter].width = min(max_len + 4, 40)
 
 
-def generate_xlsx(trades_by_symbol, deposits, withdrawals, live_prices, fx_rates, output_path):
+def generate_xlsx(trades_by_symbol, deposits, withdrawals, live_prices, fx_rates, output_path, manual_plans=None, manual_transfers=None):
     wb = openpyxl.Workbook()
 
     # ---- Sheet 1: Transactions ----
@@ -332,7 +384,7 @@ def generate_xlsx(trades_by_symbol, deposits, withdrawals, live_prices, fx_rates
     ws2["A2"].value = f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     ws2["A2"].font = SUBTITLE_FONT
 
-    holdings = compute_holdings(trades_by_symbol, deposits, withdrawals)
+    holdings = compute_holdings(trades_by_symbol, deposits, withdrawals, manual_plans, manual_transfers)
     h_headers = ["Coin", "Bought", "Sold", "Deposited", "Withdrawn", "Net Holdings", "Avg Buy Price (USD)", "Current Price (USD)", "Market Value (USD)", "Unrealised P&L (USD)"]
     hr2 = 4
     for c, h in enumerate(h_headers, 1):
@@ -510,8 +562,16 @@ def main():
 
     output = args.output or str(Path.home() / "Desktop" / f"Binance_Report_{datetime.now().strftime('%Y%m%d')}.xlsx")
 
+    script_dir = Path(__file__).resolve().parent
+    manual_plans = load_manual_dca_plans(script_dir)
+    manual_transfers = load_manual_transfers(script_dir)
+
     print(f"Binance Portfolio Reporter")
     print(f"Symbols: {', '.join(symbols)}")
+    if manual_plans:
+        print(f"Manual DCA plans: {len(manual_plans)}")
+    if manual_transfers:
+        print(f"Manual transfers: {len(manual_transfers)}")
     print()
 
     # 1. Fetch trades
@@ -542,7 +602,7 @@ def main():
 
     # 3. Live prices
     print("Fetching live prices...", end=" ", flush=True)
-    holdings = compute_holdings(trades_by_symbol, deposits, withdrawals)
+    holdings = compute_holdings(trades_by_symbol, deposits, withdrawals, manual_plans, manual_transfers)
     live_prices = {}
     for coin in holdings:
         for quote in ("USDC", "USDT"):
@@ -559,7 +619,7 @@ def main():
 
     # 5. Generate XLSX
     print()
-    tx_count = generate_xlsx(trades_by_symbol, deposits, withdrawals, live_prices, fx_rates, output)
+    tx_count = generate_xlsx(trades_by_symbol, deposits, withdrawals, live_prices, fx_rates, output, manual_plans, manual_transfers)
     print(f"Report saved: {output}")
     print(f"  {tx_count} transactions across 3 sheets (Transactions, Holdings, PNL Summary)")
 

@@ -6,3 +6,5 @@ dist/
 *.spec
 *.xlsx
 .env
+manual_dca_plans.json
+manual_transfers.json

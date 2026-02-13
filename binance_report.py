@@ -439,16 +439,16 @@ def generate_xlsx(
     # ---- Sheet 2: Holdings ----
     ws2 = wb.create_sheet("Holdings")
     ws2.sheet_properties.tabColor = "548235"
-    ws2.merge_cells("A1:J1")
+    ws2.merge_cells("A1:H1")
     ws2["A1"].value = "Current Holdings"
     ws2["A1"].font = TITLE_FONT
     ws2.row_dimensions[1].height = 30
-    ws2.merge_cells("A2:J2")
+    ws2.merge_cells("A2:H2")
     ws2["A2"].value = f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     ws2["A2"].font = SUBTITLE_FONT
 
     holdings = compute_holdings(trades_by_symbol, deposits, withdrawals, manual_plans, manual_transfers)
-    h_headers = ["Coin", "Bought", "Sold", "Deposited", "Withdrawn", "Net Holdings", "Avg Buy Price (USD)", "Current Price (USD)", "Market Value (USD)", "Unrealised P&L (USD)"]
+    h_headers = ["Coin", "Bought", "Sold", "Net Holdings", "Avg Buy Price (USD)", "Current Price (USD)", "Market Value (USD)", "Unrealised P&L (USD)"]
     hr2 = 4
     for c, h in enumerate(h_headers, 1):
         ws2.cell(row=hr2, column=c, value=h)
@@ -476,21 +476,25 @@ def generate_xlsx(
         cprice = live_prices.get(coin, 0)
         mval = net * cprice if cprice else 0
         cost = h["buy_quote"] - h["sell_quote"]
-        pnl = mval - cost if cprice else 0
+        if coin in STABLECOINS:
+            pnl = "N/A"
+        else:
+            pnl = (mval - cost) if cprice else 0
         if cprice:
             total_market += mval
-            total_cost += cost
+            if coin not in STABLECOINS:
+                total_cost += cost
 
         r = hr2 + 1 + ri
-        vals = [coin, h["buy_qty"], h["sell_qty"], h["deposit_qty"], h["withdraw_qty"], net, avg_buy, cprice or "N/A", mval if cprice else "N/A", pnl if cprice else "N/A"]
+        vals = [coin, h["buy_qty"], h["sell_qty"], net, avg_buy, cprice or "N/A", mval if cprice else "N/A", pnl if cprice else "N/A"]
         for c, val in enumerate(vals, 1):
             cell = ws2.cell(row=r, column=c, value=val)
             style_cell(cell, ri)
-            if c in (2, 3, 4, 5, 6) and isinstance(val, float):
+            if c in (2, 3, 4) and isinstance(val, float):
                 cell.number_format = '#,##0.00000000'
-            elif c in (7, 8, 9) and isinstance(val, (int, float)):
+            elif c in (5, 6, 7) and isinstance(val, (int, float)):
                 cell.number_format = '#,##0.00'
-            elif c == 10 and isinstance(val, (int, float)):
+            elif c == 8 and isinstance(val, (int, float)):
                 cell.number_format = '#,##0.00'
                 if val > 0:
                     cell.font, cell.fill = GREEN_FONT, GREEN_FILL
@@ -501,11 +505,11 @@ def generate_xlsx(
     if ri > 0:
         r = hr2 + ri + 2
         ws2.cell(row=r, column=1, value="TOTAL").font = Font(bold=True, size=11)
-        c = ws2.cell(row=r, column=9, value=total_market)
+        c = ws2.cell(row=r, column=7, value=total_market)
         c.font = Font(bold=True, size=11)
         c.number_format = '#,##0.00'
         tp = total_market - total_cost
-        c = ws2.cell(row=r, column=10, value=tp)
+        c = ws2.cell(row=r, column=8, value=tp)
         c.font = Font(bold=True, size=11, color="006100" if tp >= 0 else "9C0006")
         c.number_format = '#,##0.00'
     auto_width(ws2)

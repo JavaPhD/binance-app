@@ -130,6 +130,25 @@ def fetch_traded_symbols(key, secret, base_url):
     return symbols
 
 
+def fetch_account_balances(key, secret, base_url):
+    """Return current spot balances from account endpoint (free + locked)."""
+    account = api_request("GET", "/api/v3/account", {}, key, secret, base_url)
+    balances = {}
+    for b in account.get("balances", []):
+        asset = b.get("asset")
+        if not asset:
+            continue
+        try:
+            free = float(b.get("free", 0))
+            locked = float(b.get("locked", 0))
+        except (TypeError, ValueError):
+            continue
+        total = free + locked
+        if abs(total) > 1e-12:
+            balances[asset] = total
+    return balances
+
+
 def fetch_all_trades(symbol, key, secret, base_url):
     trades, from_id = [], None
     while True:
@@ -342,7 +361,17 @@ def auto_width(ws):
             ws.column_dimensions[first.column_letter].width = min(max_len + 4, 40)
 
 
-def generate_xlsx(trades_by_symbol, deposits, withdrawals, live_prices, fx_rates, output_path, manual_plans=None, manual_transfers=None):
+def generate_xlsx(
+    trades_by_symbol,
+    deposits,
+    withdrawals,
+    live_prices,
+    fx_rates,
+    output_path,
+    manual_plans=None,
+    manual_transfers=None,
+    current_balances=None,
+):
     wb = openpyxl.Workbook()
 
     # ---- Sheet 1: Transactions ----
@@ -427,12 +456,16 @@ def generate_xlsx(trades_by_symbol, deposits, withdrawals, live_prices, fx_rates
     ws2.freeze_panes = f"A{hr2 + 1}"
 
     major = ["BTC", "ETH", "BNB", "SOL"]
-    sorted_coins = sorted(holdings.keys(), key=lambda c: (0 if c in major else 1, major.index(c) if c in major else 0, c))
+    all_coins = set(holdings.keys())
+    if current_balances:
+        all_coins |= {c for c, v in current_balances.items() if abs(v) > 1e-12}
+    sorted_coins = sorted(all_coins, key=lambda c: (0 if c in major else 1, major.index(c) if c in major else 0, c))
 
     ri, total_market, total_cost = 0, 0.0, 0.0
     for coin in sorted_coins:
-        h = holdings[coin]
-        net = h["buy_qty"] - h["sell_qty"] + h["deposit_qty"]
+        h = holdings.get(coin, {"buy_qty": 0.0, "buy_quote": 0.0, "sell_qty": 0.0, "sell_quote": 0.0, "deposit_qty": 0.0, "withdraw_qty": 0.0})
+        inferred_net = h["buy_qty"] - h["sell_qty"] + h["deposit_qty"] - h["withdraw_qty"]
+        net = current_balances.get(coin, inferred_net) if current_balances else inferred_net
         if abs(net) < 1e-12 and h["buy_qty"] == 0:
             continue
         avg_buy = (h["buy_quote"] / h["buy_qty"]) if h["buy_qty"] > 0 else 0
@@ -493,8 +526,9 @@ def generate_xlsx(trades_by_symbol, deposits, withdrawals, live_prices, fx_rates
 
     ri, g_cost, g_market, g_sold = 0, 0.0, 0.0, 0.0
     for coin in sorted_coins:
-        h = holdings[coin]
-        net_qty = h["buy_qty"] - h["sell_qty"] + h["deposit_qty"]
+        h = holdings.get(coin, {"buy_qty": 0.0, "buy_quote": 0.0, "sell_qty": 0.0, "sell_quote": 0.0, "deposit_qty": 0.0, "withdraw_qty": 0.0})
+        inferred_net_qty = h["buy_qty"] - h["sell_qty"] + h["deposit_qty"] - h["withdraw_qty"]
+        net_qty = current_balances.get(coin, inferred_net_qty) if current_balances else inferred_net_qty
         if h["buy_quote"] == 0 and h["sell_quote"] == 0:
             continue
         cprice = live_prices.get(coin, 0)
@@ -639,11 +673,17 @@ def main():
     withdrawals = fetch_windowed("/sapi/v1/capital/withdraw/history", "applyTime", api_key, api_secret, base_url)
     print(f"{len(withdrawals)}")
 
-    # 3. Live prices
+    # 3. Current balances
+    print("Fetching current balances...", end=" ", flush=True)
+    current_balances = fetch_account_balances(api_key, api_secret, base_url)
+    print(f"{len(current_balances)} assets")
+
+    # 4. Live prices
     print("Fetching live prices...", end=" ", flush=True)
     holdings = compute_holdings(trades_by_symbol, deposits, withdrawals, manual_plans, manual_transfers)
+    coins_for_pricing = set(holdings.keys()) | set(current_balances.keys())
     live_prices = {}
-    for coin in holdings:
+    for coin in coins_for_pricing:
         for quote in ("USDC", "USDT"):
             price = get_spot_price(f"{coin}{quote}", base_url)
             if price:
@@ -651,14 +691,24 @@ def main():
                 break
     print(f"{len(live_prices)} coins")
 
-    # 4. FX rates
+    # 5. FX rates
     print("Fetching FX rates...", end=" ", flush=True)
     fx_rates = {"USD_SGD": get_fx_rate("USDSGD=X", 1.33), "USD_CNY": get_fx_rate("USDCNY=X", 7.10)}
     print("done")
 
-    # 5. Generate XLSX
+    # 6. Generate XLSX
     print()
-    tx_count = generate_xlsx(trades_by_symbol, deposits, withdrawals, live_prices, fx_rates, output, manual_plans, manual_transfers)
+    tx_count = generate_xlsx(
+        trades_by_symbol,
+        deposits,
+        withdrawals,
+        live_prices,
+        fx_rates,
+        output,
+        manual_plans,
+        manual_transfers,
+        current_balances,
+    )
     print(f"Report saved: {output}")
     print(f"  {tx_count} transactions across 3 sheets (Transactions, Holdings, PNL Summary)")
 

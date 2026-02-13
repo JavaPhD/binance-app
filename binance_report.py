@@ -464,8 +464,12 @@ def generate_xlsx(
     ri, total_market, total_cost = 0, 0.0, 0.0
     for coin in sorted_coins:
         h = holdings.get(coin, {"buy_qty": 0.0, "buy_quote": 0.0, "sell_qty": 0.0, "sell_quote": 0.0, "deposit_qty": 0.0, "withdraw_qty": 0.0})
-        inferred_net = h["buy_qty"] - h["sell_qty"] + h["deposit_qty"] - h["withdraw_qty"]
-        net = current_balances.get(coin, inferred_net) if current_balances else inferred_net
+        # Portfolio view: withdrawals are treated as transfers you still own.
+        inferred_net = h["buy_qty"] - h["sell_qty"] + h["deposit_qty"]
+        if current_balances and coin in STABLECOINS:
+            net = current_balances.get(coin, inferred_net)
+        else:
+            net = inferred_net
         if abs(net) < 1e-12 and h["buy_qty"] == 0:
             continue
         avg_buy = (h["buy_quote"] / h["buy_qty"]) if h["buy_qty"] > 0 else 0
@@ -527,8 +531,11 @@ def generate_xlsx(
     ri, g_cost, g_market, g_sold = 0, 0.0, 0.0, 0.0
     for coin in sorted_coins:
         h = holdings.get(coin, {"buy_qty": 0.0, "buy_quote": 0.0, "sell_qty": 0.0, "sell_quote": 0.0, "deposit_qty": 0.0, "withdraw_qty": 0.0})
-        inferred_net_qty = h["buy_qty"] - h["sell_qty"] + h["deposit_qty"] - h["withdraw_qty"]
-        net_qty = current_balances.get(coin, inferred_net_qty) if current_balances else inferred_net_qty
+        inferred_net_qty = h["buy_qty"] - h["sell_qty"] + h["deposit_qty"]
+        if current_balances and coin in STABLECOINS:
+            net_qty = current_balances.get(coin, inferred_net_qty)
+        else:
+            net_qty = inferred_net_qty
         if h["buy_quote"] == 0 and h["sell_quote"] == 0:
             continue
         cprice = live_prices.get(coin, 0)

@@ -460,30 +460,24 @@ def generate_xlsx(
     if current_balances:
         all_coins |= {c for c, v in current_balances.items() if abs(v) > 1e-12}
     sorted_coins = sorted(all_coins, key=lambda c: (0 if c in major else 1, major.index(c) if c in major else 0, c))
+    report_coins = [c for c in sorted_coins if c not in STABLECOINS]
 
     ri, total_market, total_cost = 0, 0.0, 0.0
-    for coin in sorted_coins:
+    for coin in report_coins:
         h = holdings.get(coin, {"buy_qty": 0.0, "buy_quote": 0.0, "sell_qty": 0.0, "sell_quote": 0.0, "deposit_qty": 0.0, "withdraw_qty": 0.0})
         # Portfolio view: withdrawals are treated as transfers you still own.
         inferred_net = h["buy_qty"] - h["sell_qty"] + h["deposit_qty"]
-        if current_balances and coin in STABLECOINS:
-            net = current_balances.get(coin, inferred_net)
-        else:
-            net = inferred_net
+        net = inferred_net
         if abs(net) < 1e-12 and h["buy_qty"] == 0:
             continue
         avg_buy = (h["buy_quote"] / h["buy_qty"]) if h["buy_qty"] > 0 else 0
         cprice = live_prices.get(coin, 0)
         mval = net * cprice if cprice else 0
         cost = h["buy_quote"] - h["sell_quote"]
-        if coin in STABLECOINS:
-            pnl = "N/A"
-        else:
-            pnl = (mval - cost) if cprice else 0
+        pnl = (mval - cost) if cprice else 0
         if cprice:
             total_market += mval
-            if coin not in STABLECOINS:
-                total_cost += cost
+            total_cost += cost
 
         r = hr2 + 1 + ri
         vals = [coin, h["buy_qty"], h["sell_qty"], net, avg_buy, cprice or "N/A", mval if cprice else "N/A", pnl if cprice else "N/A"]
@@ -533,13 +527,10 @@ def generate_xlsx(
     ws3.freeze_panes = f"A{hr3 + 1}"
 
     ri, g_cost, g_market, g_sold = 0, 0.0, 0.0, 0.0
-    for coin in sorted_coins:
+    for coin in report_coins:
         h = holdings.get(coin, {"buy_qty": 0.0, "buy_quote": 0.0, "sell_qty": 0.0, "sell_quote": 0.0, "deposit_qty": 0.0, "withdraw_qty": 0.0})
         inferred_net_qty = h["buy_qty"] - h["sell_qty"] + h["deposit_qty"]
-        if current_balances and coin in STABLECOINS:
-            net_qty = current_balances.get(coin, inferred_net_qty)
-        else:
-            net_qty = inferred_net_qty
+        net_qty = inferred_net_qty
         if h["buy_quote"] == 0 and h["sell_quote"] == 0:
             continue
         cprice = live_prices.get(coin, 0)

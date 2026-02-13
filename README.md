@@ -17,7 +17,7 @@ vim .env   # fill in your API key and secret
 ## Run
 
 ```bash
-cd binance-app   # or binance-reporter
+cd binance-app
 source .venv/bin/activate
 python binance_report.py
 ```

@@ -398,7 +398,7 @@ def generate_xlsx(trades_by_symbol, deposits, withdrawals, live_prices, fx_rates
     ri, total_market, total_cost = 0, 0.0, 0.0
     for coin in sorted_coins:
         h = holdings[coin]
-        net = h["buy_qty"] - h["sell_qty"] + h["deposit_qty"] - h["withdraw_qty"]
+        net = h["buy_qty"] - h["sell_qty"] + h["deposit_qty"]
         if abs(net) < 1e-12 and h["buy_qty"] == 0:
             continue
         avg_buy = (h["buy_quote"] / h["buy_qty"]) if h["buy_qty"] > 0 else 0
@@ -460,7 +460,7 @@ def generate_xlsx(trades_by_symbol, deposits, withdrawals, live_prices, fx_rates
     ri, g_cost, g_market, g_sold = 0, 0.0, 0.0, 0.0
     for coin in sorted_coins:
         h = holdings[coin]
-        net_qty = h["buy_qty"] - h["sell_qty"] + h["deposit_qty"] - h["withdraw_qty"]
+        net_qty = h["buy_qty"] - h["sell_qty"] + h["deposit_qty"]
         if h["buy_quote"] == 0 and h["sell_quote"] == 0:
             continue
         cprice = live_prices.get(coin, 0)
